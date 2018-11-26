@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28010.2050
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GzipStreamExtensions.GZipTest", "ConsoleApp1\GzipStreamExtensions.GZipTest.csproj", "{9542FD80-FF9B-4021-8D56-9ED22322D12A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GzipStreamExtensions.GZipTest", "GzipStreamExtensions.GZipTest\GzipStreamExtensions.GZipTest.csproj", "{9542FD80-FF9B-4021-8D56-9ED22322D12A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

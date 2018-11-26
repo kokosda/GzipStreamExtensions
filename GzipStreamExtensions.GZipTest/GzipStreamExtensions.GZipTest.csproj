@@ -41,9 +41,20 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Events\CompressionCompletedEventArgs.cs" />
+    <Compile Include="Events\CompressionCompletedEventHandler.cs" />
+    <Compile Include="Events\ThreadStateHandledEventArgs.cs" />
     <Compile Include="GzipStreamExtensions.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\FileCompressionStrategy.cs" />
+    <Compile Include="Services\FileTaskDescriptor.cs" />
+    <Compile Include="Services\IFileOperationStrategy.cs" />
+    <Compile Include="Services\SeekPointsThreadTaskManager.cs" />
+    <Compile Include="Threads\ThreadStateDispatcherEnqueueResult.cs" />
+    <Compile Include="Threads\ThreadStateDispatcher.cs" />
+    <Compile Include="Threads\ThreadState.cs" />
+    <Compile Include="Threads\ThreadTask.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

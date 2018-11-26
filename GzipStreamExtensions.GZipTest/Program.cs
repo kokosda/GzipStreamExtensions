@@ -8,7 +8,6 @@ namespace ConsoleApp1
         static void Main(string[] args)
         {
             var path = "Resources/WorkingSet01.mp4";
-            Operator.CompressAsync(path);
             Console.ReadKey();
         }
     }
