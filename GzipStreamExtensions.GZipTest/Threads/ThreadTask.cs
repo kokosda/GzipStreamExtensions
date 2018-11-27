@@ -2,7 +2,7 @@
 
 namespace GzipStreamExtensions.GZipTest.Threads
 {
-    public class ThreadTask<T>
+    public sealed class ThreadTask<T>
     {
         public int DesiredThreadsCount { get; set; }
         public Action<T> Action { get; set; }

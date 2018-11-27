@@ -1,18 +1,20 @@
 ﻿using GzipStreamExtensions.GZipTest.Enums;
+using GzipStreamExtensions.GZipTest.Facilities;
+using GzipStreamExtensions.GZipTest.Services.Abstract;
 using System;
 
 namespace GzipStreamExtensions.GZipTest.Services
 {
-    public class ConsoleInputParser : IInputParser
+    internal sealed class ConsoleInputParser : IInputParser
     {
-        public InputParserResult Parse(string[] arguments)
+        public ResponseContainer<InputParserResult> Parse(string[] arguments)
         {
-            var result = new InputParserResult();
+            var result = new ResponseContainer<InputParserResult>(success: true);
             var usageAppending = "Usage: compress/decompress [source file path] [target file path]";
 
             if (arguments == null)
             {
-                result.Message = $"Arguments should be passed. {usageAppending}";
+                result.AddErrorMessage($"Arguments should be passed. {usageAppending}");
                 return result;
             }
 
@@ -20,26 +22,33 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             if (arguments.Length < expectedArgumentsCount || arguments.Length > expectedArgumentsCount)
             {
-                result.Message = $"Expected arguments count is {expectedArgumentsCount}. {usageAppending}";
+                result.AddErrorMessage($"Expected arguments count is {expectedArgumentsCount}. {usageAppending}");
                 return result;
             }
 
             var fileOperationString = arguments[0];
-            result.FileOperation = GetFileOperation(fileOperationString);
+            var inputParserResult = new InputParserResult();
+            inputParserResult.FileOperation = GetFileOperation(fileOperationString);
             
-            if (result.FileOperation == FileOperationsEnum.None)
-            {
-                result.Message = $"File operation \"{fileOperationString}\" is not supported. {usageAppending}";
-                return result;
-            }
+            if (inputParserResult.FileOperation == FileOperationsEnum.None)
+                result.AddErrorMessage($"File operation \"{fileOperationString}\" is not supported.");
 
             if (string.IsNullOrEmpty(arguments[1]))
+                result.AddErrorMessage($"Source file path should be specified.");
+
+            if (string.IsNullOrEmpty(arguments[2]))
+                result.AddErrorMessage($"Target file path should be specified.");
+
+            if (!result.Success)
             {
-                result.Message = $"Source file path should be specified. {usageAppending}";
+                result.AddMessage(usageAppending);
                 return result;
             }
 
-            result.Success = true;
+            inputParserResult.SourceFilePath = arguments[1];
+            inputParserResult.TargetFilePath = arguments[2];
+
+            result.SetSuccessValue(inputParserResult);
             return result;
         }
 

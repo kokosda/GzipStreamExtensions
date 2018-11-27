@@ -1,6 +1,6 @@
 ﻿using System.IO;
 
-namespace GzipStreamExtensions.GZipTest.Services
+namespace GzipStreamExtensions.GZipTest.Services.Abstract
 {
     public interface IFileOperationStrategy
     {

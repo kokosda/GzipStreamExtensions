@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using GzipStreamExtensions.GZipTest.Services.Abstract;
+using System.IO;
 using System.IO.Compression;
 
 namespace GzipStreamExtensions.GZipTest.Services

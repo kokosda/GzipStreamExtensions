@@ -2,7 +2,7 @@
 
 namespace GzipStreamExtensions.GZipTest.Threads
 {
-    internal sealed class ThreadStateDispatcherEnqueueResult<T>
+    public sealed class ThreadStateDispatcherEnqueueResult<T>
     {
         public ThreadStateDispatcherEnqueueResult(ThreadState<T>[] threadStates)
         {

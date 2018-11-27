@@ -1,19 +1,16 @@
 ﻿using System;
+using System.Threading;
 
 namespace GzipStreamExtensions.GZipTest.Threads
 {
-    internal sealed class ThreadStateDispatcher
+    internal sealed class ThreadStateDispatcher : IThreadStateDispatcher
     {
         public ThreadStateDispatcherEnqueueResult<T> EnqueueTask<T>(ThreadTask<T> threadTask)
         {
             if (threadTask == null)
                 throw new ArgumentNullException(nameof(threadTask));
 
-            var threadsCount = threadTask.DesiredThreadsCount;
-
-            if (threadsCount <= 0 || threadsCount > Environment.ProcessorCount)
-                threadsCount = Environment.ProcessorCount;
-
+            var threadsCount = GetAvailableThreadsCount(threadTask.DesiredThreadsCount);
             var threadStates = new ThreadState<T>[Environment.ProcessorCount];
 
             for (int i = 0; i < threadStates.Length; i++)
@@ -38,14 +35,19 @@ namespace GzipStreamExtensions.GZipTest.Threads
             }
         }
 
-        public int GetAvailableThreadsCount(int desiredThreadsCount)
+        public int GetAvailableThreadsCount(int? desiredThreadsCount = null)
         {
-            var result = desiredThreadsCount;
+            var result = desiredThreadsCount ?? 0;
 
             if (result <= 0 || result > Environment.ProcessorCount)
                 result = Environment.ProcessorCount;
 
             return result;
+        }
+
+        public void WaitTaskCompleted()
+        {
+            Thread.CurrentThread.Join();
         }
     }
 }
