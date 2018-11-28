@@ -47,7 +47,9 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\Abstract\IFileOperationsManager.cs" />
+    <Compile Include="Services\Abstract\ILog.cs" />
     <Compile Include="Services\ConsoleInputParser.cs" />
+    <Compile Include="Services\ConsoleLog.cs" />
     <Compile Include="Services\FileOperationStrategyFactory.cs" />
     <Compile Include="Services\FileTaskDescriptorFactory.cs" />
     <Compile Include="Services\Abstract\IFileOperationStrategyFactory.cs" />
@@ -58,6 +60,7 @@
     <Compile Include="Services\Abstract\IFileOperationStrategy.cs" />
     <Compile Include="Services\FileOperationsManager.cs" />
     <Compile Include="Services\Abstract\IInputParser.cs" />
+    <Compile Include="Bootstrapper.cs" />
     <Compile Include="Threads\IThreadStateDispatcher.cs" />
     <Compile Include="Threads\ThreadStateDispatcherEnqueueResult.cs" />
     <Compile Include="Threads\ThreadStateDispatcher.cs" />
