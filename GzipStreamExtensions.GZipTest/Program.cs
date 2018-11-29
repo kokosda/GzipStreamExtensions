@@ -9,9 +9,9 @@ namespace GzipStreamExtensions.GZipTest
         {
             var test = new[]
             {
-                "decompress",
-                "resources/workingset02.exe.gz",
-                "resources/workingset02.exe",
+                "compress",
+                "resources/workingset01.mp4",
+                "resources/workingset02.mp4.gz",
 
             };
 
