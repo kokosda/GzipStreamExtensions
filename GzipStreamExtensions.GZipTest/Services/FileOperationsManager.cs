@@ -3,6 +3,7 @@ using GzipStreamExtensions.GZipTest.Services.Abstract;
 using GzipStreamExtensions.GZipTest.Threads;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -14,7 +15,7 @@ namespace GzipStreamExtensions.GZipTest.Services
         private readonly IThreadStateDispatcher threadStateDispatcher;
         private readonly ILog log;
         private readonly int defaultReadBufferSize = 16 * 1024 * 1024;
-        private readonly int defaultLocalReadBufferSize = 1 * 1024 * 1024;
+        private readonly int defaultLocalReadBufferSize = 8 * 1024 * 1024;
         private readonly int defaultFlushBufferSize = 16 * 1024 * 1024;
 
         public FileOperationsManager(IThreadStateDispatcher threadStateDispatcher, ILog log)
@@ -34,11 +35,17 @@ namespace GzipStreamExtensions.GZipTest.Services
                 var threadTask = GetThreadTask(queue, fileTaskDescriptor);
                 var enqueueResult = threadStateDispatcher.EnqueueTask(threadTask);
 
+                var stopWatch = Stopwatch.StartNew();
                 threadStateDispatcher.StartTask(enqueueResult);
+
+                log.LogInfo("Please wait...");
+
                 threadStateDispatcher.WaitTaskCompleted();
+                stopWatch.Stop();
                 threadTask.State.Dispose();
 
                 result.Join(threadTask.State.ResponseContainer);
+                log.LogInfo($"Completed! Elapsed in {stopWatch.Elapsed}.");
             }
             catch(Exception ex)
             {
@@ -101,9 +108,6 @@ namespace GzipStreamExtensions.GZipTest.Services
 
         private void Work(State state)
         {
-            var queue = state.GlobalQueue;            
-            var fileTaskDescriptor = state.FileTaskDescriptor;
-
             try
             {
                 while (true)
@@ -117,29 +121,26 @@ namespace GzipStreamExtensions.GZipTest.Services
                     {
                         state.LockGlobalQueue();
 
-                        if (state.IsDone || !state.ResponseContainer.Success)
-                        {
-                            state.UnlockGlobalQueue();
-                            return;
-                        }
-
                         if (state.IsLocalQueueEmpty)
                         {
-                            var internalTask = queue.Count > 0 ? queue.Dequeue() : null;
+                            var globalQueueTask = state.GlobalQueue.Count > 0 ? state.GlobalQueue.Dequeue() : null;
 
-                            if (internalTask == null)
+                            if (globalQueueTask == null)
                             {
                                 state.IsDone = true;
                                 state.UnlockGlobalQueue();
                                 return;
                             }
 
-                            state.SourceFileStream.Seek(internalTask.SeekPoint, SeekOrigin.Begin);
+                            state.SourceFileStream.Seek(globalQueueTask.SeekPoint, SeekOrigin.Begin);
                             state.ReadBuffer = new byte[defaultReadBufferSize];
                             state.ReadBufferSize = state.SourceFileStream.Read(state.ReadBuffer, 0, defaultReadBufferSize);
                             state.LocalQueue = GetLocalQueue(state.ReadBuffer, state.ReadBufferSize);
                             localQueueTask = state.LocalQueue.Dequeue();
+                            localQueueTask.ReadBuffer = state.ReadBuffer;
                             state.IsLocalQueueEmpty = state.LocalQueue.Count == 0;
+
+                            log.LogInfo($"Working with range of bytes {globalQueueTask.SeekPoint} - {state.ReadBufferSize}.");
                         }
 
                         state.UnlockGlobalQueue();
@@ -153,7 +154,6 @@ namespace GzipStreamExtensions.GZipTest.Services
                         state.LockLocalQueue();
 
                         localQueueTask = state.LocalQueue.Count > 0 ? state.LocalQueue.Dequeue() : null;
-                        localQueueTask.ReadBuffer = state.ReadBuffer;
 
                         if (localQueueTask == null)
                         {
@@ -162,11 +162,17 @@ namespace GzipStreamExtensions.GZipTest.Services
                             continue;
                         }
 
+                        localQueueTask.ReadBuffer = state.ReadBuffer;
+
                         state.UnlockLocalQueue();
                     }
 
-                    var fileOperationStrategy = fileTaskDescriptor.FileOperationStrategy;
+                    var fileOperationStrategy = state.FileTaskDescriptor.FileOperationStrategy;
                     var processedBytes = fileOperationStrategy.Read(localQueueTask.ReadBuffer, localQueueTask.ReadBufferOffset, localQueueTask.ReadBufferSize);
+
+                    if (!processedBytes.Any())
+                        continue;
+
                     byte[] flushBuffer = null;
                     int flushBytesCount = 0;
 
@@ -198,15 +204,13 @@ namespace GzipStreamExtensions.GZipTest.Services
                     state.UnlockFlushBuffer();
 
                     if (flushBuffer != null)
-                        fileOperationStrategy.Write(targetFileStream, flushBuffer, bytesCountToWrite: flushBytesCount);
+                        fileOperationStrategy.Write(state.TargetFileStream, flushBuffer, bytesCountToWrite: flushBytesCount);
                 }
             }
             catch(Exception ex)
             {
-                state.LockGlobalQueue();
-                state.ResponseContainer.AddErrorMessage($"Error while performing background work. Message: {ex.Message}{Environment.NewLine}{ex.StackTrace}.");
                 state.IsDone = true;
-                state.UnlockGlobalQueue();
+                state.ResponseContainer.AddErrorMessage($"Error while performing background work. Message: {ex.Message}{Environment.NewLine}{ex.StackTrace}.");
             }
         }
 
@@ -288,8 +292,8 @@ namespace GzipStreamExtensions.GZipTest.Services
             }
             public bool IsLocalQueueEmpty
             {
-                get { return IsLocalQueueEmpty; }
-                set { IsLocalQueueEmpty = value; }
+                get { return isLocalQueueEmpty; }
+                set { isLocalQueueEmpty = value; }
             }
 
             public State()

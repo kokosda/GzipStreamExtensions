@@ -5,6 +5,9 @@ namespace GzipStreamExtensions.GZipTest.Threads
 {
     internal sealed class ThreadStateDispatcher : IThreadStateDispatcher
     {
+        private readonly ManualResetEvent manualResetEvent = new ManualResetEvent(initialState: false);
+        private int threadsCount = 0;
+
         public ThreadStateDispatcherEnqueueResult<T> EnqueueTask<T>(ThreadTask<T> threadTask)
         {
             if (threadTask == null)
@@ -28,9 +31,11 @@ namespace GzipStreamExtensions.GZipTest.Threads
                 throw new ArgumentNullException(nameof(enqueueResult));
 
             var threadStates = enqueueResult.ThreadStates;
+            threadsCount = threadStates.Length;
 
             foreach(var threadState in threadStates)
             {
+                threadState.OnFinished = OnThreadStateFinished;
                 threadState.Start();
             }
         }
@@ -47,7 +52,18 @@ namespace GzipStreamExtensions.GZipTest.Threads
 
         public void WaitTaskCompleted()
         {
-            Thread.CurrentThread.Join();
+            manualResetEvent.WaitOne();
+        }
+
+        public void Dispose()
+        {
+            manualResetEvent.Close();
+        }
+
+        private void OnThreadStateFinished()
+        {
+            if (Interlocked.Decrement(ref threadsCount) == 0)
+                manualResetEvent.Set();
         }
     }
 }

@@ -16,6 +16,7 @@ namespace GzipStreamExtensions.GZipTest
                 arguments = line.Split(' ');
             }
 
+            ILog log = new ConsoleLog();
             IInputParser inputParser = new ConsoleInputParser();
             var inputParserResultResponseContainer = inputParser.Parse(arguments);
 
@@ -28,7 +29,7 @@ namespace GzipStreamExtensions.GZipTest
             var inputParserResult = inputParserResultResponseContainer.Value;
 
             IFileOperationStrategyFactory fileOperationStrategyFactory = new FileOperationStrategyFactory();
-            IFileTaskDescriptorFactory fileTaskDescriptorFactory = new FileTaskDescriptorFactory(fileOperationStrategyFactory);
+            IFileTaskDescriptorFactory fileTaskDescriptorFactory = new FileTaskDescriptorFactory(fileOperationStrategyFactory, log);
 
             var fileTaskDescriptorResponseContainer = fileTaskDescriptorFactory.GetByInputParserResult(inputParserResult);
 
@@ -40,10 +41,10 @@ namespace GzipStreamExtensions.GZipTest
 
             var fileTaskDescriptor = fileTaskDescriptorResponseContainer.Value;
             IThreadStateDispatcher threadStateDispatcher = new ThreadStateDispatcher();
-            ILog log = new ConsoleLog();
             IFileOperationsManager fileOperationsManager = new FileOperationsManager(threadStateDispatcher, log);
 
             var runResponseContainer = fileOperationsManager.RunByFileTaskDescriptor(fileTaskDescriptor);
+            threadStateDispatcher.Dispose();
 
             if (!runResponseContainer.Success)
             {

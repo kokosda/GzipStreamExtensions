@@ -15,6 +15,7 @@ namespace GzipStreamExtensions.GZipTest.Threads
         }
         public T State { get; private set; }
         public Action<T> Action { get; private set; }
+        public Action OnFinished { get; set; }
 
         public ThreadState(Action<T> action, T state)
         {
@@ -47,6 +48,7 @@ namespace GzipStreamExtensions.GZipTest.Threads
             try
             {
                 Action(State);
+                OnFinished();
             }
             finally
             {

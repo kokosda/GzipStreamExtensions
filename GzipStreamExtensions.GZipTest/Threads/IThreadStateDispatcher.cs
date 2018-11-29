@@ -1,6 +1,8 @@
-﻿namespace GzipStreamExtensions.GZipTest.Threads
+﻿using System;
+
+namespace GzipStreamExtensions.GZipTest.Threads
 {
-    public interface IThreadStateDispatcher
+    public interface IThreadStateDispatcher : IDisposable
     {
         ThreadStateDispatcherEnqueueResult<T> EnqueueTask<T>(ThreadTask<T> threadTask);
 

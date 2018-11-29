@@ -5,7 +5,7 @@ using System.IO.Compression;
 
 namespace GzipStreamExtensions.GZipTest.Services
 {
-    internal sealed class FileCompressionStrategy : IFileOperationStrategy
+    internal sealed class FileDecompressionStrategy : IFileOperationStrategy
     {
         public byte[] Read(byte[] buffer, int offset, int bufferSize)
         {
@@ -13,15 +13,18 @@ namespace GzipStreamExtensions.GZipTest.Services
                 throw new ArgumentNullException(nameof(buffer));
 
             byte[] result;
+            byte[] temp = new byte[checked(bufferSize * 10)];
+            int bytesRead;
 
-            using (var ms = new MemoryStream())
+            using (var ms = new MemoryStream(buffer, offset, bufferSize))
             {
-                using (var gzipStream = new GZipStream(ms, CompressionMode.Compress))
+                using (var gzipStream = new GZipStream(ms, CompressionMode.Decompress))
                 {
-                    gzipStream.Write(buffer, offset, bufferSize);
+                    bytesRead = gzipStream.Read(temp, 0, temp.Length);
                 }
 
-                result = ms.ToArray();
+                result = new byte[bytesRead];
+                Array.Copy(temp, result, result.Length);
             }
 
             return result;

@@ -50,6 +50,7 @@
     <Compile Include="Services\Abstract\ILog.cs" />
     <Compile Include="Services\ConsoleInputParser.cs" />
     <Compile Include="Services\ConsoleLog.cs" />
+    <Compile Include="Services\FileDecompressionStrategy.cs" />
     <Compile Include="Services\FileOperationStrategyFactory.cs" />
     <Compile Include="Services\FileTaskDescriptorFactory.cs" />
     <Compile Include="Services\Abstract\IFileOperationStrategyFactory.cs" />

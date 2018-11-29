@@ -8,10 +8,12 @@ namespace GzipStreamExtensions.GZipTest.Services
     internal sealed class FileTaskDescriptorFactory : IFileTaskDescriptorFactory
     {
         private readonly IFileOperationStrategyFactory fileOperationStrategyFactory;
+        private readonly ILog log;
 
-        public FileTaskDescriptorFactory(IFileOperationStrategyFactory fileOperationStrategyFactory)
+        public FileTaskDescriptorFactory(IFileOperationStrategyFactory fileOperationStrategyFactory, ILog log)
         {
             this.fileOperationStrategyFactory = fileOperationStrategyFactory;
+            this.log = log;
         }
 
         public ResponseContainer<FileTaskDescriptor> GetByInputParserResult(InputParserResult inputParserResult)
@@ -74,7 +76,10 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             try
             {
-                using (File.Create(filePath));
+                using (var fs = File.Create(filePath))
+                {
+                    log.LogInfo($"File {filePath} was created.");
+                }
             }
             catch (Exception ex)
             {

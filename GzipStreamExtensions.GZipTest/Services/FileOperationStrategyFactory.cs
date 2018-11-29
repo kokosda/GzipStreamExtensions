@@ -22,6 +22,7 @@ namespace GzipStreamExtensions.GZipTest.Services
                     result.SetSuccessValue(new FileCompressionStrategy());
                     break;
                 case FileOperationsEnum.Decompression:
+                    result.SetSuccessValue(new FileDecompressionStrategy());
                     break;
             }
 

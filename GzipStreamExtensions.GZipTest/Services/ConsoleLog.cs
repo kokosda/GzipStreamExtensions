@@ -1,5 +1,6 @@
 ﻿using GzipStreamExtensions.GZipTest.Services.Abstract;
 using System;
+using System.Threading;
 
 namespace GzipStreamExtensions.GZipTest.Services
 {
@@ -7,7 +8,7 @@ namespace GzipStreamExtensions.GZipTest.Services
     {
         public void LogInfo(string message)
         {
-            Console.WriteLine(message);
+            Console.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{Thread.CurrentThread.ManagedThreadId}]: {message}");
         }
     }
 }
