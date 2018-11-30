@@ -41,7 +41,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Artifacts\DefaultAlgorithms.cs" />
+    <Compile Include="Samples\SampleAlgorithms.cs" />
     <Compile Include="Enums\FileOperationsEnum.cs" />
     <Compile Include="Facilities\ResponseContainer.cs" />
     <Compile Include="Program.cs" />
