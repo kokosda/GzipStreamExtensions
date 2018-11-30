@@ -183,7 +183,7 @@ namespace GzipStreamExtensions.GZipTest.Services
             localQueueTask.ReadBuffer = state.ReadBuffer;
             state.IsLocalQueueEmpty = !state.LocalQueue.Any();
 
-            log.LogInfo($"Working with range of bytes {globalQueueTask.SeekPoint} - {state.ReadBufferSize}.");
+            log.LogInfo($"Working with range of bytes {globalQueueTask.SeekPoint} - {globalQueueTask.SeekPoint + state.ReadBufferSize}.");
 
             state.UnlockGlobalQueue();
 

@@ -11,7 +11,7 @@ namespace GzipStreamExtensions.GZipTest
             {
                 "compress",
                 "resources/workingset01.mp4",
-                "resources/workingset02.mp4.gz",
+                "resources/workingset01.mp4.gz",
 
             };
 
