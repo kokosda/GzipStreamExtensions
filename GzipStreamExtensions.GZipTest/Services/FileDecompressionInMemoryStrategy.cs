@@ -5,11 +5,11 @@ using System.IO.Compression;
 
 namespace GzipStreamExtensions.GZipTest.Services
 {
-    internal sealed class FileInMemoryDecompressionStrategy : IFileOperationStrategy<MemoryStream, GZipStream>
+    internal sealed class FileDecompressionInMemoryStrategy : IFileOperationStrategy<MemoryStream, GZipStream>
     {
         public FileOperationStrategyParameters<MemoryStream, GZipStream> Parameters { get; private set; }
 
-        public FileInMemoryDecompressionStrategy(FileOperationStrategyParameters<MemoryStream, GZipStream> parameters)
+        public FileDecompressionInMemoryStrategy(FileOperationStrategyParameters<MemoryStream, GZipStream> parameters)
         {
             if (parameters == null)
                 throw new ArgumentNullException(nameof(parameters));
@@ -24,6 +24,19 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             Parameters.SourceStream = sourceStream;
             Parameters.OperationStream = new GZipStream(Parameters.SourceStream, CompressionMode.Decompress, leaveOpen: true);
+        }
+
+        public byte[] Read2(byte[] buffer, int offset, int bufferSize, bool shouldDisposeOperationStream)
+        {
+            byte[] temp = new byte[checked(Parameters.BufferSize * 10)];
+            var bytesRead = Parameters.OperationStream.Read(temp, 0, temp.Length);
+
+            if (shouldDisposeOperationStream)
+                Parameters.OperationStream.Dispose();
+
+            var result = new byte[bytesRead];
+            Array.Copy(temp, result, result.Length);
+            return result;
         }
 
         public byte[] Read(byte[] buffer, int offset, int bufferSize)
@@ -46,15 +59,6 @@ namespace GzipStreamExtensions.GZipTest.Services
                 Array.Copy(temp, result, result.Length);
             }
 
-            return result;
-        }
-
-        public byte[] Read2(byte[] buffer, int offset, int bufferSize)
-        {
-            byte[] temp = new byte[checked(Parameters.BufferSize * 10)];
-            var bytesRead = Parameters.OperationStream.Read(temp, 0, temp.Length);
-            var result = new byte[bytesRead];
-            Array.Copy(temp, result, result.Length);
             return result;
         }
 

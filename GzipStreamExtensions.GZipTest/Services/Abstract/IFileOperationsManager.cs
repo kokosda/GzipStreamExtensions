@@ -1,9 +1,12 @@
 ﻿using GzipStreamExtensions.GZipTest.Facilities;
+using System.IO;
 
 namespace GzipStreamExtensions.GZipTest.Services.Abstract
 {
-    public interface IFileOperationsManager
+    public interface IFileOperationsManager<TSourceStream, TOperationStream>
+        where TSourceStream: Stream
+        where TOperationStream: Stream
     {
-        ResponseContainer RunByFileTaskDescriptor(FileTaskDescriptor fileTaskDescriptor);
+        ResponseContainer RunByFileTaskDescriptor(FileTaskDescriptor<TSourceStream, TOperationStream> fileTaskDescriptor);
     }
 }

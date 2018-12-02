@@ -2,6 +2,8 @@
 using GzipStreamExtensions.GZipTest.Services.Abstract;
 using GzipStreamExtensions.GZipTest.Threads;
 using System;
+using System.IO;
+using System.IO.Compression;
 
 namespace GzipStreamExtensions.GZipTest
 {
@@ -28,8 +30,8 @@ namespace GzipStreamExtensions.GZipTest
 
             var inputParserResult = inputParserResultResponseContainer.Value;
 
-            IFileOperationStrategyFactory fileOperationStrategyFactory = new FileOperationStrategyFactory();
-            IFileTaskDescriptorFactory fileTaskDescriptorFactory = new FileTaskDescriptorFactory(fileOperationStrategyFactory, log);
+            IFileOperationStrategyFactory<MemoryStream, GZipStream> fileOperationStrategyFactory = new FileOperationStrategyInMemoryFactory();
+            IFileTaskDescriptorFactory<MemoryStream, GZipStream> fileTaskDescriptorFactory = new FileTaskDescriptorInMemoryFactory(fileOperationStrategyFactory, log);
 
             var fileTaskDescriptorResponseContainer = fileTaskDescriptorFactory.GetByInputParserResult(inputParserResult);
 
@@ -41,7 +43,7 @@ namespace GzipStreamExtensions.GZipTest
 
             var fileTaskDescriptor = fileTaskDescriptorResponseContainer.Value;
             IThreadStateDispatcher threadStateDispatcher = new ThreadStateDispatcher();
-            IFileOperationsManager fileOperationsManager = new FileOperationsManager(threadStateDispatcher, log);
+            IFileOperationsManager<MemoryStream, GZipStream> fileOperationsManager = new FileOperationsManager<MemoryStream, GZipStream>(threadStateDispatcher, log);
 
             var runResponseContainer = fileOperationsManager.RunByFileTaskDescriptor(fileTaskDescriptor);
             threadStateDispatcher.Dispose();

@@ -2,23 +2,24 @@
 using GzipStreamExtensions.GZipTest.Services.Abstract;
 using System;
 using System.IO;
+using System.IO.Compression;
 
 namespace GzipStreamExtensions.GZipTest.Services
 {
-    internal sealed class FileTaskDescriptorFactory : IFileTaskDescriptorFactory
+    internal sealed class FileTaskDescriptorInMemoryFactory : IFileTaskDescriptorFactory<MemoryStream, GZipStream>
     {
-        private readonly IFileOperationStrategyFactory fileOperationStrategyFactory;
+        private readonly IFileOperationStrategyFactory<MemoryStream, GZipStream> fileOperationStrategyFactory;
         private readonly ILog log;
 
-        public FileTaskDescriptorFactory(IFileOperationStrategyFactory fileOperationStrategyFactory, ILog log)
+        public FileTaskDescriptorInMemoryFactory(IFileOperationStrategyFactory<MemoryStream, GZipStream> fileOperationStrategyFactory, ILog log)
         {
             this.fileOperationStrategyFactory = fileOperationStrategyFactory;
             this.log = log;
         }
 
-        public ResponseContainer<FileTaskDescriptor> GetByInputParserResult(InputParserResult inputParserResult)
+        public ResponseContainer<FileTaskDescriptor<MemoryStream, GZipStream>> GetByInputParserResult(InputParserResult inputParserResult)
         {
-            var result = new ResponseContainer<FileTaskDescriptor>(success: true);
+            var result = new ResponseContainer<FileTaskDescriptor<MemoryStream, GZipStream>>(success: true);
 
             if (inputParserResult == null)
             {
@@ -38,12 +39,13 @@ namespace GzipStreamExtensions.GZipTest.Services
             if (!result.Success)
                 return result;
 
-            var fileTaskDescriptor = new FileTaskDescriptor
+            var fileTaskDescriptor = new FileTaskDescriptor<MemoryStream, GZipStream>
             {
                 FileOperationStrategy = fileOperationStrategyResponseContainer.Value,
                 SourceFilePath = inputParserResult.SourceFilePath,
                 FileLength = sourceFileAvailabilityResponseContainer.Value,
-                TargetFilePath = inputParserResult.TargetFilePath
+                TargetFilePath = inputParserResult.TargetFilePath, 
+                SourceStream = new MemoryStream()
             };
 
             result.SetSuccessValue(fileTaskDescriptor);

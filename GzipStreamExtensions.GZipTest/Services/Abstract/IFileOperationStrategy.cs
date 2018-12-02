@@ -11,7 +11,7 @@ namespace GzipStreamExtensions.GZipTest.Services.Abstract
 
         void InitializeOperationStream(TSourceStream sourceStream);
         byte[] Read(byte[] buffer, int offset, int bufferSize);
-        byte[] Read2(byte[] buffer, int offset, int bufferSize);
+        byte[] Read2(byte[] buffer, int offset, int bufferSize, bool shouldCloseOperationStream);
         void Write(FileStream targetFileStream, byte[] buffer, int bytesCountToWrite);
     }
 }

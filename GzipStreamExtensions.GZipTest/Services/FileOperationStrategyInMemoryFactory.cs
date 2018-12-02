@@ -6,7 +6,7 @@ using System.IO.Compression;
 
 namespace GzipStreamExtensions.GZipTest.Services
 {
-    internal sealed class FileOperationStrategyFactory : IFileOperationStrategyFactory<MemoryStream, GZipStream>
+    internal sealed class FileOperationStrategyInMemoryFactory : IFileOperationStrategyFactory<MemoryStream, GZipStream>
     {
         public ResponseContainer<IFileOperationStrategy<MemoryStream, GZipStream>> GetByFileOperation(FileOperationsEnum fileOperation)
         {
@@ -23,13 +23,13 @@ namespace GzipStreamExtensions.GZipTest.Services
                 case FileOperationsEnum.Compression:
                     {
                         var parameters = new FileOperationStrategyParameters<MemoryStream, GZipStream>();
-                        result.SetSuccessValue(new FileInMemoryCompressionStrategy(parameters));
+                        result.SetSuccessValue(new FileCompressionInMemoryStrategy(parameters));
                     }
                     break;
                 case FileOperationsEnum.Decompression:
                     {
                         var parameters = new FileOperationStrategyParameters<MemoryStream, GZipStream>();
-                        result.SetSuccessValue(new FileInMemoryDecompressionStrategy(parameters));
+                        result.SetSuccessValue(new FileDecompressionInMemoryStrategy(parameters));
                     }
                     break;
             }
