@@ -13,8 +13,8 @@ namespace GzipStreamExtensions.GZipTest.Threads
             if (threadTask == null)
                 throw new ArgumentNullException(nameof(threadTask));
 
-            var threadsCount = GetAvailableThreadsCount(threadTask.DesiredThreadsCount);
-            var threadStates = new ThreadState<T>[threadsCount];
+            var threadsCount = GetAvailableThreadsCount();
+            var threadStates = new ThreadState<T>[1];
 
             for (int i = 0; i < threadStates.Length; i++)
             {
@@ -40,13 +40,9 @@ namespace GzipStreamExtensions.GZipTest.Threads
             }
         }
 
-        public int GetAvailableThreadsCount(int? desiredThreadsCount = null)
+        public int GetAvailableThreadsCount()
         {
-            var result = desiredThreadsCount ?? 0;
-
-            if (result <= 0 || result > Environment.ProcessorCount)
-                result = Environment.ProcessorCount;
-
+            var result = Environment.ProcessorCount;
             return result;
         }
 

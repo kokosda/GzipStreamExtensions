@@ -5,8 +5,18 @@ using System.IO.Compression;
 
 namespace GzipStreamExtensions.GZipTest.Services
 {
-    internal sealed class FileCompressionStrategy : IFileOperationStrategy
+    internal sealed class FileInMemoryCompressionStrategy : IFileOperationStrategy<MemoryStream, GZipStream>
     {
+        public FileOperationStrategyParameters<MemoryStream, GZipStream> Parameters { get; private set; }
+
+        public FileInMemoryCompressionStrategy(FileOperationStrategyParameters<MemoryStream, GZipStream> parameters)
+        {
+            if (parameters == null)
+                throw new ArgumentNullException(nameof(parameters));
+
+            Parameters = parameters;
+        }
+
         public byte[] Read(byte[] buffer, int offset, int bufferSize)
         {
             if (buffer == null)
@@ -24,6 +34,13 @@ namespace GzipStreamExtensions.GZipTest.Services
                 result = ms.ToArray();
             }
 
+            return result;
+        }
+
+        public byte[] Read()
+        {            
+            Parameters.OperationStream.Write(Parameters.Buffer, Parameters.Offset, Parameters.BufferSize);
+            var result = Parameters.SourceStream.ToArray();
             return result;
         }
 

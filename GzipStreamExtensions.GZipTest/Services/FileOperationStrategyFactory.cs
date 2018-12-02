@@ -1,14 +1,16 @@
 ﻿using GzipStreamExtensions.GZipTest.Enums;
 using GzipStreamExtensions.GZipTest.Facilities;
 using GzipStreamExtensions.GZipTest.Services.Abstract;
+using System.IO;
+using System.IO.Compression;
 
 namespace GzipStreamExtensions.GZipTest.Services
 {
-    internal sealed class FileOperationStrategyFactory : IFileOperationStrategyFactory
+    internal sealed class FileOperationStrategyFactory : IFileOperationStrategyFactory<MemoryStream, GZipStream>
     {
-        public ResponseContainer<IFileOperationStrategy> GetByFileOperation(FileOperationsEnum fileOperation)
+        public ResponseContainer<IFileOperationStrategy<MemoryStream, GZipStream>> GetByFileOperation(FileOperationsEnum fileOperation)
         {
-            var result = new ResponseContainer<IFileOperationStrategy>(success: true);
+            var result = new ResponseContainer<IFileOperationStrategy<MemoryStream, GZipStream>>(success: true);
 
             if (fileOperation == FileOperationsEnum.None)
             {
@@ -19,10 +21,16 @@ namespace GzipStreamExtensions.GZipTest.Services
             switch(fileOperation)
             {
                 case FileOperationsEnum.Compression:
-                    result.SetSuccessValue(new FileCompressionStrategy());
+                    {
+                        var parameters = new FileOperationStrategyParameters<MemoryStream, GZipStream>();
+                        result.SetSuccessValue(new FileInMemoryCompressionStrategy(parameters));
+                    }
                     break;
                 case FileOperationsEnum.Decompression:
-                    result.SetSuccessValue(new FileDecompressionStrategy());
+                    {
+                        var parameters = new FileOperationStrategyParameters<MemoryStream, GZipStream>();
+                        result.SetSuccessValue(new FileInMemoryDecompressionStrategy(parameters));
+                    }
                     break;
             }
 

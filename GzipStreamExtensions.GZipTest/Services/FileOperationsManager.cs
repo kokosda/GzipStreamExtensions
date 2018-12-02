@@ -16,7 +16,6 @@ namespace GzipStreamExtensions.GZipTest.Services
         private readonly ILog log;
         private readonly int defaultReadBufferSize = 16 * 1024 * 1024;
         private readonly int defaultLocalReadBufferSize = 1 * 1024 * 1024;
-        private readonly int defaultFlushBufferSize = 16 * 1024 * 1024;
 
         public FileOperationsManager(IThreadStateDispatcher threadStateDispatcher, ILog log)
         {
@@ -38,6 +37,7 @@ namespace GzipStreamExtensions.GZipTest.Services
                 var threadTask = GetThreadTask(queue, fileTaskDescriptor);
                 var enqueueResult = threadStateDispatcher.EnqueueTask(threadTask);
                 threadTask.State.EnqueueResult = enqueueResult;
+                threadTask.State.IsAwaitable = enqueueResult.ThreadStates.Count() > 1;
 
                 threadStateDispatcher.StartTask(enqueueResult);
 
@@ -97,12 +97,10 @@ namespace GzipStreamExtensions.GZipTest.Services
             var result = new ThreadTask<State>
             {
                 Action = Work,
-                DesiredThreadsCount = queue.Count,
                 State = new State
                 {
                     GlobalQueue = queue,
                     FileTaskDescriptor = fileTaskDescriptor,
-                    FlushBufferSize = defaultFlushBufferSize,
                     SourceFileStream = new FileStream(fileTaskDescriptor.SourceFilePath, FileMode.Open, FileAccess.Read),
                     TargetFileStream = new FileStream(fileTaskDescriptor.TargetFilePath, FileMode.Append, FileAccess.Write)
                 }
@@ -129,7 +127,6 @@ namespace GzipStreamExtensions.GZipTest.Services
 
                     var fileOperationStrategy = state.FileTaskDescriptor.FileOperationStrategy;
                     var processedBytes = fileOperationStrategy.Read(localQueueTask.ReadBuffer, localQueueTask.ReadBufferOffset, localQueueTask.ReadBufferSize);
-
                     
                     WorkWithFlushBuffer(state, localQueueTask, processedBytes);
                 }
@@ -173,7 +170,7 @@ namespace GzipStreamExtensions.GZipTest.Services
             state.SourceFileStream.Seek(globalQueueTask.SeekPoint, SeekOrigin.Begin);
             state.ReadBuffer = new byte[defaultReadBufferSize];
             state.ReadBufferSize = state.SourceFileStream.Read(state.ReadBuffer, 0, defaultReadBufferSize);
-            state.LocalQueue = GetLocalQueue(state, state.CurrentGlobalQueueTask, state.ReadBuffer, state.ReadBufferSize);
+            state.LocalQueue = GetLocalQueue(state);
             state.CurrentGlobalQueueTask.TasksCount = state.LocalQueue.Count;
             state.IsLocalQueueEmpty = !state.LocalQueue.Any();
 
@@ -213,9 +210,9 @@ namespace GzipStreamExtensions.GZipTest.Services
 
         private void WorkWithFlushBuffer(State state, InternalLocalQueueTask localQueueTask, byte[] processedBytes)
         {
-            if (localQueueTask.GlobalQueueTask.Order > state.FlushGlobalQueueTask.Order)
+            if (state.IsAwaitable && localQueueTask.GlobalQueueTask.Order > state.FlushGlobalQueueTask.Order)
             {
-                state.WaitFlushBufferWhile(() => state.CurrentGlobalQueueTask.Order > state.FlushGlobalQueueTask.Order);
+                state.WaitFlushBufferWhile(() => localQueueTask.GlobalQueueTask.Order > state.FlushGlobalQueueTask.Order);
             }
 
             state.LockFlushBuffer();
@@ -252,12 +249,12 @@ namespace GzipStreamExtensions.GZipTest.Services
             state.UnlockFlushBuffer();
         }
 
-        private Queue<InternalLocalQueueTask> GetLocalQueue(State state, InternalGlobalQueueTask globalQueueTask, byte[] buffer, int bufferSize)
+        private Queue<InternalLocalQueueTask> GetLocalQueue(State state)
         {
             var result = new Queue<InternalLocalQueueTask>();
             var threadsCount = state.EnqueueResult.ThreadStates.Count();
             var localBufferSize = (int)Math.Ceiling((double)defaultLocalReadBufferSize / threadsCount);
-            var tasksCount = (int)Math.Ceiling((double)bufferSize / localBufferSize);
+            var tasksCount = (int)Math.Ceiling((double)state.ReadBufferSize / localBufferSize);
             var offset = 0;
 
             for (int i = 0; i < tasksCount; i++)
@@ -265,10 +262,10 @@ namespace GzipStreamExtensions.GZipTest.Services
                 var tempBufferSize = localBufferSize;
                 var tempPosition = offset + localBufferSize;
 
-                if (tempPosition > bufferSize)
-                    tempBufferSize = bufferSize - offset;
+                if (tempPosition > state.ReadBufferSize)
+                    tempBufferSize = state.ReadBufferSize - offset;
 
-                var task = new InternalLocalQueueTask(globalQueueTask)
+                var task = new InternalLocalQueueTask(state.CurrentGlobalQueueTask)
                 {
                     ReadBuffer = state.ReadBuffer,
                     ReadBufferOffset = offset,
@@ -284,37 +281,26 @@ namespace GzipStreamExtensions.GZipTest.Services
 
         private class InternalGlobalQueueTask
         {
-            private volatile int tasksCount;
-            private volatile int order;
-
             public long SeekPoint { get; set; }
-            public int TasksCount
-            {
-                get { return tasksCount; }
-                set { tasksCount = value; }
-            }
-            public int Order
-            {
-                get { return order; }
-                set { order = value; }
-            }
+            public int TasksCount { get; set; }
+            public int Order { get; set; }
         }
 
         private class InternalLocalQueueTask
         {
-            public InternalLocalQueueTask(InternalGlobalQueueTask globalQueueTask)
-            {
-                ReadBuffer = new byte[0];
-                WriteBuffer = new byte[0];
-                GlobalQueueTask = globalQueueTask;
-            }
-
             public int ReadBufferOffset { get; set; }
             public int ReadBufferSize { get; set; }
             public byte[] ReadBuffer { get; set; }
             public byte[] WriteBuffer { get; set; }
             public int Order { get; set; }
             public InternalGlobalQueueTask GlobalQueueTask { get; set; }
+
+            public InternalLocalQueueTask(InternalGlobalQueueTask globalQueueTask)
+            {
+                ReadBuffer = new byte[0];
+                WriteBuffer = new byte[0];
+                GlobalQueueTask = globalQueueTask;
+            }
         }
 
         private class State : IDisposable
@@ -324,9 +310,6 @@ namespace GzipStreamExtensions.GZipTest.Services
             private readonly object flushBufferSynchronization = new object();
             private volatile bool isLocalQueueEmpty;
             private volatile bool isDone;
-            private volatile byte[] readBuffer;
-            private volatile int readBufferSize;
-            private volatile InternalGlobalQueueTask globalQueueTask;
             private volatile InternalGlobalQueueTask flushGlobalQueueTask;
 
             public ThreadStateDispatcherEnqueueResult<State> EnqueueResult { get; set; }
@@ -335,28 +318,15 @@ namespace GzipStreamExtensions.GZipTest.Services
             public FileTaskDescriptor FileTaskDescriptor { get; set; }
             public FileStream SourceFileStream { get; set; }
             public FileStream TargetFileStream { get; set; }
-            public byte[] ReadBuffer
-            {
-                get { return readBuffer; }
-                set { readBuffer = value; }
-            }
-            public int ReadBufferSize
-            {
-                get { return readBufferSize; }
-                set { readBufferSize = value; }
-            }
-            public InternalGlobalQueueTask CurrentGlobalQueueTask
-            {
-                get { return globalQueueTask; }
-                set { globalQueueTask = value; }
-            }
+            public byte[] ReadBuffer { get; set; }
+            public int ReadBufferSize { get; set; }
+            public InternalGlobalQueueTask CurrentGlobalQueueTask { get; set; }
             public InternalGlobalQueueTask FlushGlobalQueueTask
             {
                 get { return flushGlobalQueueTask;  }
                 set { flushGlobalQueueTask = value; }
             }
             public int TotalBytesCountWroteToReadBuffer { get; set; }
-            public int FlushBufferSize { get; set; }
             public int TotalBytesCountWroteToFlushBuffer { get; set; }
             public List<InternalLocalQueueTask> UnorderedCompletedLocalTasksCollection { get; set; }
             public ResponseContainer ResponseContainer { get; set; }
@@ -370,6 +340,7 @@ namespace GzipStreamExtensions.GZipTest.Services
                 get { return isLocalQueueEmpty; }
                 set { isLocalQueueEmpty = value; }
             }
+            public bool IsAwaitable { get; set; }
 
             public State()
             {

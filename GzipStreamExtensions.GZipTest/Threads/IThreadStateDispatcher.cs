@@ -8,7 +8,7 @@ namespace GzipStreamExtensions.GZipTest.Threads
 
         void StartTask<T>(ThreadStateDispatcherEnqueueResult<T> enqueueResult);
 
-        int GetAvailableThreadsCount(int? desiredThreadsCount = null);
+        int GetAvailableThreadsCount();
         void WaitTaskCompleted();
     }
 }
