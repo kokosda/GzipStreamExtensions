@@ -1,10 +1,7 @@
-using System;
-
 namespace GzipStreamExtensions.GZipTest
 {
     class Program
     {
-        [STAThread]
         static void Main(string[] args)
         {
             var test = new[]
