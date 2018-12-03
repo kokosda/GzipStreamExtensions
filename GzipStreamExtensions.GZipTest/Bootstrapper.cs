@@ -30,8 +30,8 @@ namespace GzipStreamExtensions.GZipTest
 
             var inputParserResult = inputParserResultResponseContainer.Value;
 
-            IFileOperationStrategyFactory<MemoryStream, GZipStream> fileOperationStrategyFactory = new FileOperationStrategyInMemoryFactory();
-            IFileTaskDescriptorFactory<MemoryStream, GZipStream> fileTaskDescriptorFactory = new FileTaskDescriptorInMemoryFactory(fileOperationStrategyFactory, log);
+            IFileOperationStrategyFactory<MemoryStream, GZipStream> fileOperationStrategyFactory = new FileOperationStrategyFactory();
+            IFileTaskDescriptorFactory<MemoryStream, GZipStream> fileTaskDescriptorFactory = new FileTaskDescriptorFactory(fileOperationStrategyFactory, log);
 
             var fileTaskDescriptorResponseContainer = fileTaskDescriptorFactory.GetByInputParserResult(inputParserResult);
 

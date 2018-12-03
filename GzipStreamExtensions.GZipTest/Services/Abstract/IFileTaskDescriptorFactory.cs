@@ -3,10 +3,8 @@ using System.IO;
 
 namespace GzipStreamExtensions.GZipTest.Services.Abstract
 {
-    public interface IFileTaskDescriptorFactory<TSourceStream, TOperationStream>
-        where TSourceStream: Stream
-        where TOperationStream: Stream
+    public interface IFileTaskDescriptorFactory
     {
-        ResponseContainer<FileTaskDescriptor<TSourceStream, TOperationStream>> GetByInputParserResult(InputParserResult inputParserResult);
+        ResponseContainer<FileTaskDescriptor> GetByInputParserResult(InputParserResult inputParserResult);
     }
 }

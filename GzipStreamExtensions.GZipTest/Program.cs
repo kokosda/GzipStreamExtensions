@@ -10,10 +10,10 @@ namespace GzipStreamExtensions.GZipTest
             {
                 "decompress",
                 "resources/workingset03.pdf.gz",
-                "resources/workingset01.mp4",
+                "resources/workingset03.pdf.gz",
             };
 
-            SampleAlgorithms.CompressReusably(test[2]);
+            SampleAlgorithms.DecompressReusably(test[2]);
 
             //Bootstrapper.Start(test);
         }

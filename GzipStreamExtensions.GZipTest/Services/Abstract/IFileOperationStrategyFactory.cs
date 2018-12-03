@@ -4,10 +4,8 @@ using System.IO;
 
 namespace GzipStreamExtensions.GZipTest.Services.Abstract
 {
-    public interface IFileOperationStrategyFactory<TSourceStream, TOperationStream> 
-        where TSourceStream: Stream
-        where TOperationStream: Stream
+    public interface IFileOperationStrategyFactory
     {
-        ResponseContainer<IFileOperationStrategy<TSourceStream, TOperationStream>> GetByFileOperation(FileOperationsEnum fileOperation);
+        ResponseContainer<IFileOperationStrategy> GetByFileOperation(FileOperationsEnum fileOperation);
     }
 }
