@@ -23,7 +23,7 @@ namespace GzipStreamExtensions.GZipTest.Services
             return result;
         }
 
-        public void PerformOperation(FileOperationStrategyImmutableParameters immutableParameters, FileOperationStrategyMutableParameters mutableParameters)
+        public void Read(FileOperationStrategyImmutableParameters immutableParameters, FileOperationStrategyMutableParameters mutableParameters)
         {
             if (immutableParameters == null)
                 throw new ArgumentNullException(nameof(immutableParameters));
@@ -37,9 +37,16 @@ namespace GzipStreamExtensions.GZipTest.Services
                 mutableParameters.IsCompleted = true;
         }
 
-        public void FlushBytes(FileOperationStrategyImmutableParameters immutableParameters, FileOperationStrategyMutableParameters mutableParameters)
+        public void Write(FileOperationStrategyImmutableParameters immutableParameters, FileOperationStrategyMutableParameters mutableParameters)
         {
             immutableParameters.OperationStream.Write(mutableParameters.Buffer, mutableParameters.Offset, mutableParameters.BufferSize);
+
+            if (mutableParameters.IsCompleted)
+            {
+                immutableParameters.OperationStream.Dispose();
+                immutableParameters.TargetStream.Dispose();
+                immutableParameters.SourceStream.Dispose();
+            }
         }
     }
 }

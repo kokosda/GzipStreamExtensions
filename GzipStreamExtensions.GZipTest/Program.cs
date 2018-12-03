@@ -1,5 +1,3 @@
-using GzipStreamExtensions.GZipTest.Artifacts;
-
 namespace GzipStreamExtensions.GZipTest
 {
     class Program
@@ -8,14 +6,12 @@ namespace GzipStreamExtensions.GZipTest
         {
             var test = new[]
             {
-                "decompress",
-                "resources/workingset03.pdf.gz",
+                "compress",
+                "resources/workingset03.pdf",
                 "resources/workingset03.pdf.gz",
             };
 
-            SampleAlgorithms.DecompressReusably(test[2]);
-
-            //Bootstrapper.Start(test);
+            Bootstrapper.Start(test);
         }
     }
 }

@@ -114,9 +114,6 @@ namespace GzipStreamExtensions.GZipTest.Services
         {
             try
             {
-                var fileOperationStrategy = state.FileTaskDescriptor.FileOperationStrategy;
-                var strategyImmutableParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
-
                 while (true)
                 {
                     if (state.IsDone)
@@ -244,7 +241,7 @@ namespace GzipStreamExtensions.GZipTest.Services
                 Offset = localQueueTask.ReadBufferOffset,
                 BufferSize = localQueueTask.ReadBufferSize
             };
-            strategy.PerformOperation(strategyParameters, mutableStrategyParameters);
+            strategy.Read(strategyParameters, mutableStrategyParameters);
             localQueueTask.StrategyMutableParameters = mutableStrategyParameters;
 
             state.UnlockLocalQueue();
@@ -267,10 +264,11 @@ namespace GzipStreamExtensions.GZipTest.Services
             {
                 Buffer = localQueueTask.StrategyMutableParameters.Buffer,
                 Offset = localQueueTask.StrategyMutableParameters.Offset,
-                BufferSize = localQueueTask.StrategyMutableParameters.BytesRead
+                BufferSize = localQueueTask.StrategyMutableParameters.BytesRead,
+                IsCompleted = localQueueTask.StrategyMutableParameters.IsCompleted
             };
 
-            strategy.FlushBytes(strategyParameters, mutableStrategyParameters);
+            strategy.Write(strategyParameters, mutableStrategyParameters);
             
             state.FlushGlobalQueueTask = state.CurrentGlobalQueueTask;
 
