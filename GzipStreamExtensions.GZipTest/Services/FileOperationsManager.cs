@@ -86,8 +86,7 @@ namespace GzipStreamExtensions.GZipTest.Services
             {
                 var internalTask = new InternalGlobalQueueTask
                 {
-                    SeekPoint = readBufferSize * i,
-                    Order = i
+                    SeekPoint = readBufferSize * i
                 };
                 queue.Enqueue(internalTask);
             }
@@ -122,12 +121,10 @@ namespace GzipStreamExtensions.GZipTest.Services
                     if (!WorkWithGlobalQueue(state))
                         return;
 
-                    InternalLocalQueueTask localQueueTask = null;
-
-                    if (!WorkWithLocalQueue(state, out localQueueTask))
+                    if (!WorkWithReadLocalQueue(state))
                         continue;
                     
-                    WorkWithFlushBuffer(state, localQueueTask);
+                    WorkWithWriteLocalQueue(state);
                 }
             }
             catch(Exception ex)
@@ -141,12 +138,15 @@ namespace GzipStreamExtensions.GZipTest.Services
         {
             var result = true;
 
-            if (!state.IsLocalQueueEmpty)
+            if (state.IsReadyToWrite)
+                return result;
+
+            if (!state.IsReadLocalQueueEmpty)
                 return result;
 
             state.LockGlobalQueue();
 
-            if (!state.IsLocalQueueEmpty || state.IsDone)
+            if (!state.IsReadLocalQueueEmpty || state.IsDone)
             {
                 state.UnlockGlobalQueue();
                 return result;
@@ -161,194 +161,233 @@ namespace GzipStreamExtensions.GZipTest.Services
                 return false;
             }
 
-            state.CurrentGlobalQueueTask = globalQueueTask;
-
-            if (state.FlushGlobalQueueTask == null)
-                state.FlushGlobalQueueTask = state.CurrentGlobalQueueTask;
-
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
             state.ReadBufferSize = globalQueueTask.SeekPoint + strategyParameters.ReadBufferSize < state.FileTaskDescriptor.FileLength
                 ? strategyParameters.ReadBufferSize
                 : checked((int)(state.FileTaskDescriptor.FileLength - globalQueueTask.SeekPoint));
             state.ReadBuffer = new byte[state.ReadBufferSize];
-            state.LocalQueue = GetLocalQueue(state);
-            state.CurrentGlobalQueueTask.TasksCount = state.LocalQueue.Count;
-            state.IsLocalQueueEmpty = !state.LocalQueue.Any();
+            state.ReadLocalQueue = GetReadLocalQueue(
+                buffer: state.ReadBuffer,
+                bufferSize: state.ReadBufferSize,
+                tasksCount: strategyParameters.ReadBufferChunks);
+            state.IsReadLocalQueueEmpty = !state.ReadLocalQueue.Any();
 
-            log.LogInfo($"Working with range of bytes {state.CurrentGlobalQueueTask.SeekPoint} - {state.CurrentGlobalQueueTask.SeekPoint + state.ReadBufferSize}.");
+            log.LogInfo($"Working with range of bytes {globalQueueTask.SeekPoint} - {globalQueueTask.SeekPoint + state.ReadBufferSize}.");
 
             state.UnlockGlobalQueue();
 
             return result;
         }
 
-        private Queue<InternalLocalQueueTask> GetLocalQueue(State state)
+        private Queue<InternalLocalQueueTask> GetReadLocalQueue(byte[] buffer, int bufferSize, int tasksCount)
         {
             var result = new Queue<InternalLocalQueueTask>();
-            var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
-            var localBufferSize = (int)Math.Ceiling((double)state.ReadBufferSize / strategyParameters.ReadBufferChunks);
-            var tasksCount = state.FileTaskDescriptor.FileOperationStrategyParameters.ReadBufferChunks;
-            var offset = 0;
+            var localBufferSize = (int)Math.Ceiling((double)bufferSize / tasksCount);
+            var localOffset = 0;
 
             for (int i = 0; i < tasksCount; i++)
             {
                 var tempBufferSize = localBufferSize;
-                var tempPosition = offset + localBufferSize;
+                var tempPosition = localOffset + localBufferSize;
 
-                if (tempPosition > state.ReadBufferSize)
-                    tempBufferSize = state.ReadBufferSize - offset;
+                if (tempPosition > bufferSize)
+                    tempBufferSize = bufferSize - localOffset;
 
-                var task = new InternalLocalQueueTask(state.CurrentGlobalQueueTask)
+                var task = new InternalLocalQueueTask
                 {
-                    ReadBuffer = state.ReadBuffer,
-                    ReadBufferOffset = offset,
-                    ReadBufferSize = tempBufferSize,
-                    Order = i
+                    Buffer = buffer,
+                    BufferOffset = localOffset,
+                    BufferSize = tempBufferSize
                 };
                 result.Enqueue(task);
 
-                offset += tempBufferSize;
+                localOffset += tempBufferSize;
             }
             return result;
         }
 
-        private bool WorkWithLocalQueue(State state, out InternalLocalQueueTask localQueueTask)
+        private bool WorkWithReadLocalQueue(State state)
         {
             var result = true;
-            localQueueTask = null;
 
-            if (state.IsLocalQueueEmpty)
+            if (state.IsReadyToWrite)
+                return true;
+
+            if (state.IsReadLocalQueueEmpty)
                 return false;
 
-            state.LockLocalQueue();
+            state.LockReadLocalQueue();
 
-            if (state.IsLocalQueueEmpty)
+            if (state.IsReadyToWrite)
             {
-                state.UnlockLocalQueue();
+                state.UnlockReadLocalQueue();
+                return true;
+            }
+
+            if (state.IsReadLocalQueueEmpty)
+            {
+                state.UnlockReadLocalQueue();
                 return false;
             }
 
-            localQueueTask = state.LocalQueue.Dequeue();
+            var readLocalQueueTask = state.ReadLocalQueue.Dequeue();
 
-            if (!state.LocalQueue.Any())
-                state.IsLocalQueueEmpty = true;
+            if (!state.ReadLocalQueue.Any())
+                state.IsReadLocalQueueEmpty = true;
 
             var strategy = state.FileTaskDescriptor.FileOperationStrategy;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
             var mutableStrategyParameters = new FileOperationStrategyMutableParameters
             {
-                Buffer = localQueueTask.ReadBuffer,
-                Offset = localQueueTask.ReadBufferOffset,
-                BufferSize = localQueueTask.ReadBufferSize
+                Buffer = readLocalQueueTask.Buffer,
+                Offset = readLocalQueueTask.BufferOffset,
+                BufferSize = readLocalQueueTask.BufferSize
             };
             strategy.Read(strategyParameters, mutableStrategyParameters);
-            localQueueTask.StrategyMutableParameters = mutableStrategyParameters;
 
             if (mutableStrategyParameters.IsCompleted)
             {
-                state.LocalQueue.Clear();
-                state.IsLocalQueueEmpty = true;
+                state.ReadLocalQueue.Clear();
+                state.IsReadLocalQueueEmpty = true;
             }
 
-            state.UnlockLocalQueue();
+            if (state.IsReadyToWrite)
+                state.WaitWriteLocalQueueWhile(() => state.IsReadyToWrite);
+
+            var writeLocalQueue = GetWriteLocalQueue(
+                state: state,
+                offset: readLocalQueueTask.BufferOffset,
+                mutableStrategyParameters: mutableStrategyParameters,
+                buffer: readLocalQueueTask.Buffer,
+                bufferSize: mutableStrategyParameters.BytesRead, 
+                tasksCount: strategyParameters.WriteBufferChunks);
+
+            state.TotalBytesCountInWriteLocalQueue += mutableStrategyParameters.BytesRead;
+            state.IsReadyToWrite = state.TotalBytesCountInWriteLocalQueue >= strategyParameters.WriteBufferSize ||
+                mutableStrategyParameters.IsCompleted;
+            result = state.IsReadyToWrite;
+
+            state.UnlockReadLocalQueue();
 
             return result;
         }
 
-        private void WorkWithFlushBuffer(State state, InternalLocalQueueTask localQueueTask)
+        private Queue<InternalLocalQueueTask> GetWriteLocalQueue(State state, 
+            FileOperationStrategyMutableParameters mutableStrategyParameters, 
+            byte[] buffer, int offset, int bufferSize, int tasksCount)
         {
-            if (state.IsAwaitable && localQueueTask.GlobalQueueTask.Order > state.FlushGlobalQueueTask.Order)
-            {
-                state.WaitFlushBufferWhile(() => localQueueTask.GlobalQueueTask.Order > state.FlushGlobalQueueTask.Order);
-            }
+            var result = new Queue<InternalLocalQueueTask>();
+            var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
+            var localBufferSize = (int)Math.Ceiling((double)bufferSize / tasksCount);
+            var localOffset = offset;
 
-            state.LockFlushBuffer();
+            for (int i = 0; i < tasksCount; i++)
+            {
+                var task = new InternalLocalQueueTask
+                {
+                    Buffer = buffer,
+                    BufferOffset = localOffset + localBufferSize
+                };
+
+                if ((task.BufferOffset + localBufferSize) > bufferSize)
+                {
+
+                }
+
+                state.WriteLocalQueue.Enqueue(task);
+
+                task.IsTerminal = mutableStrategyParameters.IsCompleted && (i + 1) == strategyParameters.WriteBufferChunks;
+            }
+            return result;
+        }
+
+        private void WorkWithWriteLocalQueue(State state)
+        {
+            state.LockWriteLocalQueue();
 
             var strategy = state.FileTaskDescriptor.FileOperationStrategy;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
+            var writeLocalQueueTask = state.WriteLocalQueue.Dequeue();
             var mutableStrategyParameters = new FileOperationStrategyMutableParameters
             {
-                Buffer = localQueueTask.StrategyMutableParameters.Buffer,
-                Offset = localQueueTask.StrategyMutableParameters.Offset,
-                BufferSize = localQueueTask.StrategyMutableParameters.BytesRead,
-                IsCompleted = localQueueTask.StrategyMutableParameters.IsCompleted
+                Buffer = writeLocalQueueTask.Buffer,
+                Offset = writeLocalQueueTask.BufferOffset,
+                BufferSize = writeLocalQueueTask.BufferSize,
+                IsCompleted = writeLocalQueueTask.IsTerminal
             };
 
             strategy.Write(strategyParameters, mutableStrategyParameters);
-            
-            state.FlushGlobalQueueTask = state.CurrentGlobalQueueTask;
 
-            state.UnlockFlushBuffer();
+            state.IsReadyToWrite = state.WriteLocalQueue.Any();
+
+            if (state.IsReadyToWrite)
+            {
+                state.TotalBytesCountInWriteLocalQueue = 0;
+            }
+
+            state.UnlockWriteLocalQueue();
         }
 
         private class InternalGlobalQueueTask
         {
             public long SeekPoint { get; set; }
-            public int TasksCount { get; set; }
-            public int Order { get; set; }
         }
 
         private class InternalLocalQueueTask
         {
-            public int ReadBufferOffset { get; set; }
-            public int ReadBufferSize { get; set; }
-            public byte[] ReadBuffer { get; set; }
-            public byte[] WriteBuffer { get; set; }
-            public int Order { get; set; }
-            public InternalGlobalQueueTask GlobalQueueTask { get; set; }
-            public FileOperationStrategyMutableParameters StrategyMutableParameters { get; set; }
+            public int BufferOffset { get; set; }
+            public int BufferSize { get; set; }
+            public byte[] Buffer { get; set; }
+            public bool IsTerminal { get; set; }
 
-            public InternalLocalQueueTask(InternalGlobalQueueTask globalQueueTask)
+            public InternalLocalQueueTask()
             {
-                ReadBuffer = new byte[0];
-                WriteBuffer = new byte[0];
-                GlobalQueueTask = globalQueueTask;
+                Buffer = new byte[0];
             }
         }
 
         private class State
         {
             private readonly object globalQueueSynchronization = new object();
-            private readonly object localQueueSynchronization = new object();
-            private readonly object flushBufferSynchronization = new object();
-            private volatile bool isLocalQueueEmpty;
+            private readonly object readLocalQueueSynchronization = new object();
+            private readonly object writeLocalQueueSynchronization = new object();
+            private volatile bool isReadLocalQueueEmpty;
+            private volatile bool isReadyToWrite;
             private volatile bool isDone;
             private volatile InternalGlobalQueueTask flushGlobalQueueTask;
 
             public ThreadStateDispatcherEnqueueResult<State> EnqueueResult { get; set; }
             public Queue<InternalGlobalQueueTask> GlobalQueue { get; set; }
-            public Queue<InternalLocalQueueTask> LocalQueue { get; set; }
+            public Queue<InternalLocalQueueTask> ReadLocalQueue { get; set; }
+            public Queue<InternalLocalQueueTask> WriteLocalQueue { get; set; }
             public FileTaskDescriptor FileTaskDescriptor { get; set; }
             public byte[] ReadBuffer { get; set; }
             public int ReadBufferSize { get; set; }
-            public InternalGlobalQueueTask CurrentGlobalQueueTask { get; set; }
-            public InternalGlobalQueueTask FlushGlobalQueueTask
-            {
-                get { return flushGlobalQueueTask;  }
-                set { flushGlobalQueueTask = value; }
-            }
-            public int TotalBytesCountWroteToReadBuffer { get; set; }
-            public int TotalBytesCountWroteToFlushBuffer { get; set; }
-            public List<InternalLocalQueueTask> UnorderedCompletedLocalTasksCollection { get; set; }
+            public int TotalBytesCountInWriteLocalQueue { get; set; }
             public ResponseContainer ResponseContainer { get; set; }
             public bool IsDone
             {
                 get { return isDone; }
                 set { isDone = value; }
             }
-            public bool IsLocalQueueEmpty
+            public bool IsReadLocalQueueEmpty
             {
-                get { return isLocalQueueEmpty; }
-                set { isLocalQueueEmpty = value; }
+                get { return isReadLocalQueueEmpty; }
+                set { isReadLocalQueueEmpty = value; }
+            }
+            public bool IsReadyToWrite
+            {
+                get { return isReadyToWrite; }
+                set { isReadyToWrite = value; }
             }
             public bool IsAwaitable { get; set; }
 
             public State()
             {
-                UnorderedCompletedLocalTasksCollection = new List<InternalLocalQueueTask>();
                 GlobalQueue = new Queue<InternalGlobalQueueTask>();
-                LocalQueue = new Queue<InternalLocalQueueTask>();
-                IsLocalQueueEmpty = true;
+                ReadLocalQueue = new Queue<InternalLocalQueueTask>();
+                WriteLocalQueue = new Queue<InternalLocalQueueTask>();
+                IsReadLocalQueueEmpty = true;
                 ResponseContainer = new ResponseContainer(success: true);
             }
 
@@ -362,37 +401,40 @@ namespace GzipStreamExtensions.GZipTest.Services
                 Monitor.Exit(globalQueueSynchronization);
             }
 
-            public void LockLocalQueue()
+            public void LockReadLocalQueue()
             {
-                Monitor.Enter(localQueueSynchronization);
+                Monitor.Enter(readLocalQueueSynchronization);
             }
 
-            public void UnlockLocalQueue()
+            public void UnlockReadLocalQueue()
             {
-                Monitor.Exit(localQueueSynchronization);
+                Monitor.Exit(readLocalQueueSynchronization);
             }
 
-            public void LockFlushBuffer()
+            public void LockWriteLocalQueue()
             {
-                Monitor.Enter(flushBufferSynchronization);
+                Monitor.Enter(writeLocalQueueSynchronization);
             }
 
-            public void UnlockFlushBuffer()
+            public void UnlockWriteLocalQueue()
             {
-                Monitor.Pulse(flushBufferSynchronization);
-                Monitor.Exit(flushBufferSynchronization);
+                Monitor.Pulse(writeLocalQueueSynchronization);
+                Monitor.Exit(writeLocalQueueSynchronization);
             }
 
-            public void WaitFlushBufferWhile(Func<bool> func)
+            public void WaitWriteLocalQueueWhile(Func<bool> func)
             {
-                Monitor.Enter(flushBufferSynchronization);
+                if (!IsAwaitable)
+                    return;
+
+                Monitor.Enter(writeLocalQueueSynchronization);
 
                 while(func())
                 {
-                    Monitor.Wait(flushBufferSynchronization);
+                    Monitor.Wait(writeLocalQueueSynchronization);
                 }
 
-                Monitor.Exit(flushBufferSynchronization);
+                Monitor.Exit(writeLocalQueueSynchronization);
             }
         }
     }
