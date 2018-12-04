@@ -186,7 +186,7 @@ namespace GzipStreamExtensions.GZipTest.Services
         {
             var result = new Queue<InternalLocalQueueTask>();
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
-            var localBufferSize = (int)Math.Ceiling((double)strategyParameters.ReadBufferSize / strategyParameters.ReadBufferChunks);
+            var localBufferSize = (int)Math.Ceiling((double)state.ReadBufferSize / strategyParameters.ReadBufferChunks);
             var tasksCount = state.FileTaskDescriptor.FileOperationStrategyParameters.ReadBufferChunks;
             var offset = 0;
 
@@ -243,6 +243,12 @@ namespace GzipStreamExtensions.GZipTest.Services
             };
             strategy.Read(strategyParameters, mutableStrategyParameters);
             localQueueTask.StrategyMutableParameters = mutableStrategyParameters;
+
+            if (mutableStrategyParameters.IsCompleted)
+            {
+                state.LocalQueue.Clear();
+                state.IsLocalQueueEmpty = true;
+            }
 
             state.UnlockLocalQueue();
 

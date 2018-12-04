@@ -6,9 +6,9 @@ namespace GzipStreamExtensions.GZipTest
         {
             var test = new[]
             {
-                "compress",
-                "resources/workingset03.pdf",
+                "decompress",
                 "resources/workingset03.pdf.gz",
+                "resources/workingset03.pdf",
             };
 
             Bootstrapper.Start(test);

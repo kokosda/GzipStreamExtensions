@@ -12,7 +12,7 @@ namespace GzipStreamExtensions.GZipTest.Services
             var result = new FileOperationStrategyImmutableParameters
             {
                 SourceStream = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read),
-                TargetStream = new FileStream(targetFilePath, FileMode.Append, FileAccess.Write),
+                TargetStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write),
                 ReadBufferSize = 16 * 1024 * 1024,
                 ReadBufferChunks = 16,
                 WriteBufferSize = 16 * 1024 * 1024,
@@ -30,11 +30,12 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             if (mutableParameters == null)
                 throw new ArgumentNullException(nameof(mutableParameters));
-            
-            mutableParameters.BytesRead = immutableParameters.OperationStream.Read(mutableParameters.Buffer, mutableParameters.Offset, mutableParameters.BufferSize);
 
-            if (mutableParameters.BytesRead == 0)
-                mutableParameters.IsCompleted = true;
+            var bytesRead = immutableParameters.OperationStream.Read(mutableParameters.Buffer, mutableParameters.Offset, mutableParameters.BufferSize);
+            var isCompleted = bytesRead == 0 || immutableParameters.SourceStream.Position == immutableParameters.SourceStream.Length;
+
+            mutableParameters.IsCompleted = isCompleted;
+            mutableParameters.BytesRead = bytesRead;
         }
 
         public void Write(FileOperationStrategyImmutableParameters immutableParameters, FileOperationStrategyMutableParameters mutableParameters)
