@@ -256,9 +256,9 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             var writeLocalQueue = GetWriteLocalQueue(
                 state: state,
-                offset: readLocalQueueTask.BufferOffset,
                 mutableStrategyParameters: mutableStrategyParameters,
                 buffer: readLocalQueueTask.Buffer,
+                offset: readLocalQueueTask.BufferOffset,
                 bufferSize: mutableStrategyParameters.BytesRead, 
                 tasksCount: strategyParameters.WriteBufferChunks);
 
@@ -277,32 +277,31 @@ namespace GzipStreamExtensions.GZipTest.Services
             byte[] buffer, int offset, int bufferSize, int tasksCount)
         {
             var result = new Queue<InternalLocalQueueTask>();
-            var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
             var localBufferSize = (int)Math.Ceiling((double)bufferSize / tasksCount);
-            var localOffset = offset;
+            var localOffset = 0;
 
             for (int i = 0; i < tasksCount; i++)
             {
                 var task = new InternalLocalQueueTask
                 {
                     Buffer = buffer,
-                    BufferOffset = localOffset + localBufferSize
+                    BufferOffset = offset + localOffset,
+                    BufferSize = (localOffset + localBufferSize) < bufferSize ? localBufferSize : bufferSize - localOffset
                 };
-
-                if ((task.BufferOffset + localBufferSize) > bufferSize)
-                {
-
-                }
 
                 state.WriteLocalQueue.Enqueue(task);
 
-                task.IsTerminal = mutableStrategyParameters.IsCompleted && (i + 1) == strategyParameters.WriteBufferChunks;
+                task.IsTerminal = mutableStrategyParameters.IsCompleted && (i + 1) == tasksCount;
+                localOffset += localBufferSize;
             }
             return result;
         }
 
         private void WorkWithWriteLocalQueue(State state)
         {
+            if (!state.IsReadyToWrite)
+                return;
+
             state.LockWriteLocalQueue();
 
             var strategy = state.FileTaskDescriptor.FileOperationStrategy;
@@ -320,10 +319,8 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             state.IsReadyToWrite = state.WriteLocalQueue.Any();
 
-            if (state.IsReadyToWrite)
-            {
+            if (!state.IsReadyToWrite)
                 state.TotalBytesCountInWriteLocalQueue = 0;
-            }
 
             state.UnlockWriteLocalQueue();
         }
