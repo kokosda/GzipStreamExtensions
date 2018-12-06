@@ -256,6 +256,7 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             if (mutableStrategyParameters.IsCompleted)
             {
+                state.GlobalQueue.Clear();
                 state.ReadLocalQueue.Clear();
                 state.IsReadLocalQueueEmpty = true;
             }
@@ -302,7 +303,7 @@ namespace GzipStreamExtensions.GZipTest.Services
                 task.IsTerminal = mutableStrategyParameters.IsCompleted && (i + 1) == tasksCount;
                 localOffset += localBufferSize;
 
-                log.LogInfo($"Enqueue Write task {task.BufferOffset} {task.BufferSize} {task.IsTerminal}. Tasks count {state.WriteLocalQueue.Count}");
+                log.LogInfo($"Enqueued Write task {task.BufferOffset} {task.BufferSize} {task.IsTerminal}. Tasks count {state.WriteLocalQueue.Count}");
             }
         }
 
@@ -381,9 +382,8 @@ namespace GzipStreamExtensions.GZipTest.Services
             private volatile bool isReadLocalQueueEmpty;
             private volatile bool isReadyToWrite;
             private volatile bool isDone;
+            private volatile bool isGlobalTaskDoing;
             private volatile int totalBytesCountInWriteLocalQueue;
-            private InternalGlobalQueueTask globalQueueTask;
-            private bool isGlobalTaskDoing;
 
             public ThreadStateDispatcherEnqueueResult<State> EnqueueResult { get; set; }
             public Queue<InternalGlobalQueueTask> GlobalQueue { get; set; }
@@ -405,8 +405,8 @@ namespace GzipStreamExtensions.GZipTest.Services
             }
             public bool IsGlobalTaskDoing
             {
-                get => isGlobalTaskDoing;
-                set => isGlobalTaskDoing = value;
+                get { return isGlobalTaskDoing; }
+                set { isGlobalTaskDoing = value; }
             }
             public bool IsReadLocalQueueEmpty
             {
