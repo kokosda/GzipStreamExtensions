@@ -115,9 +115,6 @@ namespace GzipStreamExtensions.GZipTest.Services
             {
                 while (true)
                 {
-                    if (state.IsDone)
-                        return;
-
                     if (!WorkWithGlobalQueue(state))
                         return;
 
@@ -129,7 +126,7 @@ namespace GzipStreamExtensions.GZipTest.Services
             }
             catch(Exception ex)
             {
-                state.IsDone = true;
+                state.IsWorkDone = true;
                 state.ResponseContainer.AddErrorMessage($"Error while performing background work. Message: {ex.Message}{Environment.NewLine}{ex.StackTrace}.");
             }
         }
@@ -138,15 +135,21 @@ namespace GzipStreamExtensions.GZipTest.Services
         {
             var result = true;
 
-            if (state.IsReadyToWrite)
-                return result;
+            if (state.IsWorkDone)
+                return false;
 
-            if (!state.IsReadLocalQueueEmpty)
+            if (state.IsReadyToWrite || !state.IsReadLocalQueueEmpty || state.IsGlobalTaskDoing)
                 return result;
 
             state.LockGlobalQueue();
 
-            if (!state.IsReadLocalQueueEmpty || state.IsDone)
+            if (state.IsWorkDone)
+            {
+                state.UnlockGlobalQueue();
+                return false;
+            }
+
+            if (state.IsReadyToWrite || !state.IsReadLocalQueueEmpty || state.IsGlobalTaskDoing)
             {
                 state.UnlockGlobalQueue();
                 return result;
@@ -156,11 +159,13 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             if (globalQueueTask == null)
             {
-                state.IsDone = true;
+                log.LogInfo($"Marking done. IsReadyToWrite={state.IsReadyToWrite}, IsReadLocalQueueEmpty={state.IsReadLocalQueueEmpty}, write queue count {state.WriteLocalQueue.Count}");
+                state.IsWorkDone = true;
                 state.UnlockGlobalQueue();
                 return false;
             }
 
+            state.IsGlobalTaskDoing = true;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
             state.ReadBufferSize = strategyParameters.ReadBufferSize;
             //state.ReadBufferSize = globalQueueTask.SeekPoint + strategyParameters.ReadBufferSize < state.FileTaskDescriptor.FileLength
@@ -236,6 +241,9 @@ namespace GzipStreamExtensions.GZipTest.Services
             if (!state.ReadLocalQueue.Any())
                 state.IsReadLocalQueueEmpty = true;
 
+            if (state.IsReadyToWrite)
+                state.WaitWriteLocalQueueWhile(() => state.IsReadyToWrite);
+
             var strategy = state.FileTaskDescriptor.FileOperationStrategy;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
             var mutableStrategyParameters = new FileOperationStrategyMutableParameters
@@ -251,9 +259,6 @@ namespace GzipStreamExtensions.GZipTest.Services
                 state.ReadLocalQueue.Clear();
                 state.IsReadLocalQueueEmpty = true;
             }
-
-            if (state.IsReadyToWrite)
-                state.WaitWriteLocalQueueWhile(() => state.IsReadyToWrite);
 
             EnqueueTasksToWriteLocalQueue(
                 state: state,
@@ -281,6 +286,8 @@ namespace GzipStreamExtensions.GZipTest.Services
             var localBufferSize = (int)Math.Ceiling((double)bufferSize / tasksCount);
             var localOffset = 0;
 
+            log.LogInfo($"Tasks count {tasksCount}");
+
             for (int i = 0; i < tasksCount; i++)
             {
                 var task = new InternalLocalQueueTask
@@ -294,6 +301,8 @@ namespace GzipStreamExtensions.GZipTest.Services
 
                 task.IsTerminal = mutableStrategyParameters.IsCompleted && (i + 1) == tasksCount;
                 localOffset += localBufferSize;
+
+                log.LogInfo($"Enqueue Write task {task.BufferOffset} {task.BufferSize} {task.IsTerminal}. Tasks count {state.WriteLocalQueue.Count}");
             }
         }
 
@@ -313,6 +322,9 @@ namespace GzipStreamExtensions.GZipTest.Services
             var strategy = state.FileTaskDescriptor.FileOperationStrategy;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
             var writeLocalQueueTask = state.WriteLocalQueue.Dequeue();
+
+            log.LogInfo($"Dequeued Write task {writeLocalQueueTask.BufferOffset} {writeLocalQueueTask.BufferSize} {writeLocalQueueTask.IsTerminal}. Tasks count {state.WriteLocalQueue.Count}");
+
             var mutableStrategyParameters = new FileOperationStrategyMutableParameters
             {
                 Buffer = writeLocalQueueTask.Buffer,
@@ -324,6 +336,9 @@ namespace GzipStreamExtensions.GZipTest.Services
             strategy.Write(strategyParameters, mutableStrategyParameters);
 
             state.IsReadyToWrite = state.WriteLocalQueue.Any();
+
+            if (writeLocalQueueTask.IsTerminal)
+                state.IsGlobalTaskDoing = false;
 
             var notifyWaitingTasks = false;
 
@@ -351,7 +366,7 @@ namespace GzipStreamExtensions.GZipTest.Services
             public bool IsTerminal
             {
                 get { return isTerminal; }
-                set { isTerminal = true; }
+                set { isTerminal = value; }
             }
 
             public InternalLocalQueueTask()
@@ -369,6 +384,8 @@ namespace GzipStreamExtensions.GZipTest.Services
             private volatile bool isReadyToWrite;
             private volatile bool isDone;
             private volatile int totalBytesCountInWriteLocalQueue;
+            private InternalGlobalQueueTask globalQueueTask;
+            private bool isGlobalTaskDoing;
 
             public ThreadStateDispatcherEnqueueResult<State> EnqueueResult { get; set; }
             public Queue<InternalGlobalQueueTask> GlobalQueue { get; set; }
@@ -383,10 +400,15 @@ namespace GzipStreamExtensions.GZipTest.Services
                 set { totalBytesCountInWriteLocalQueue = value; }
             }
             public ResponseContainer ResponseContainer { get; set; }
-            public bool IsDone
+            public bool IsWorkDone
             {
                 get { return isDone; }
                 set { isDone = value; }
+            }
+            public bool IsGlobalTaskDoing
+            {
+                get => isGlobalTaskDoing;
+                set => isGlobalTaskDoing = value;
             }
             public bool IsReadLocalQueueEmpty
             {
@@ -436,8 +458,8 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             public void UnlockWriteLocalQueue(bool notifyWaitingTasks)
             {
-                if (notifyWaitingTasks)
-                    Monitor.Pulse(writeLocalQueueSynchronization);
+                //if (notifyWaitingTasks)
+                //    Monitor.Pulse(writeLocalQueueSynchronization);
 
                 Monitor.Exit(writeLocalQueueSynchronization);
             }
@@ -449,7 +471,7 @@ namespace GzipStreamExtensions.GZipTest.Services
 
                 Monitor.Enter(writeLocalQueueSynchronization);
 
-                while(func())
+                while (func())
                 {
                     Monitor.Wait(writeLocalQueueSynchronization);
                 }

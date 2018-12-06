@@ -14,7 +14,7 @@ namespace GzipStreamExtensions.GZipTest.Threads
                 throw new ArgumentNullException(nameof(threadTask));
 
             var threadsCount = GetAvailableThreadsCount();
-            var threadStates = new ThreadState<T>[2];
+            var threadStates = new ThreadState<T>[threadsCount];
 
             for (int i = 0; i < threadStates.Length; i++)
             {
