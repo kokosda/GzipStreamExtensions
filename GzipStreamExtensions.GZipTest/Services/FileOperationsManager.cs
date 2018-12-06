@@ -337,15 +337,13 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             state.IsReadyToWrite = state.WriteLocalQueue.Any();
 
-            if (writeLocalQueueTask.IsTerminal)
-                state.IsGlobalTaskDoing = false;
-
             var notifyWaitingTasks = false;
 
             if (!state.IsReadyToWrite)
             {
                 state.TotalBytesCountInWriteLocalQueue = 0;
                 notifyWaitingTasks = true;
+                state.IsGlobalTaskDoing = false;
             }
 
             state.UnlockWriteLocalQueue(notifyWaitingTasks);

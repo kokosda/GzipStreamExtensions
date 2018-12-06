@@ -6,9 +6,9 @@ namespace GzipStreamExtensions.GZipTest
         {
             var test = new[]
             {
-                "compress",
-                "resources/workingset01.mp4",
+                "decompress",
                 "resources/workingset01.mp4.gz",
+                "resources/workingset01.mp4",
             };
 
             Bootstrapper.Start(test);
