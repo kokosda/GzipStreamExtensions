@@ -41,17 +41,19 @@ namespace GzipStreamExtensions.GZipTest
                 return;
             }
 
-            var fileTaskDescriptor = fileTaskDescriptorResponseContainer.Value;
-            IThreadStateDispatcher threadStateDispatcher = new ThreadStateDispatcher();
-            IFileOperationsManager fileOperationsManager = new FileOperationsManager(threadStateDispatcher, log);
-
-            var runResponseContainer = fileOperationsManager.RunByFileTaskDescriptor(fileTaskDescriptor);
-            threadStateDispatcher.Dispose();
-
-            if (!runResponseContainer.Success)
+            using (var fileTaskDescriptor = fileTaskDescriptorResponseContainer.Value)
+            using (IThreadStateDispatcher threadStateDispatcher = new ThreadStateDispatcher())
             {
-                WriteMessage(runResponseContainer.MergeMessages());
-                return;
+                IFileOperationsManager fileOperationsManager = new FileOperationsManager(threadStateDispatcher, log);
+
+                var runResponseContainer = fileOperationsManager.RunByFileTaskDescriptor(fileTaskDescriptor);
+                threadStateDispatcher.Dispose();
+
+                if (!runResponseContainer.Success)
+                {
+                    WriteMessage(runResponseContainer.MergeMessages());
+                    return;
+                }
             }
 
             WriteMessage("Processed successfully.");

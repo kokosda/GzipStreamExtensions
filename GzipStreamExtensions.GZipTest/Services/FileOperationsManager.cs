@@ -159,7 +159,6 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             if (globalQueueTask == null)
             {
-                log.LogInfo($"Marking done. IsReadyToWrite={state.IsReadyToWrite}, IsReadLocalQueueEmpty={state.IsReadLocalQueueEmpty}, write queue count {state.WriteLocalQueue.Count}");
                 state.IsWorkDone = true;
                 state.UnlockGlobalQueue();
                 return false;
@@ -168,9 +167,6 @@ namespace GzipStreamExtensions.GZipTest.Services
             state.IsGlobalTaskDoing = true;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
             state.ReadBufferSize = strategyParameters.ReadBufferSize;
-            //state.ReadBufferSize = globalQueueTask.SeekPoint + strategyParameters.ReadBufferSize < state.FileTaskDescriptor.FileLength
-            //    ? strategyParameters.ReadBufferSize
-            //    : checked((int)(state.FileTaskDescriptor.FileLength - globalQueueTask.SeekPoint));
             state.ReadBuffer = new byte[state.ReadBufferSize];
             state.ReadLocalQueue = GetReadLocalQueue(
                 buffer: state.ReadBuffer,
@@ -242,7 +238,9 @@ namespace GzipStreamExtensions.GZipTest.Services
                 state.IsReadLocalQueueEmpty = true;
 
             if (state.IsReadyToWrite)
-                state.WaitWriteLocalQueueWhile(() => state.IsReadyToWrite);
+            {
+
+            }
 
             var strategy = state.FileTaskDescriptor.FileOperationStrategy;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
@@ -253,6 +251,8 @@ namespace GzipStreamExtensions.GZipTest.Services
                 BufferSize = readLocalQueueTask.BufferSize
             };
             strategy.Read(strategyParameters, mutableStrategyParameters);
+
+            log.LogInfo($"Read: offset {readLocalQueueTask.BufferOffset}, bytes read {mutableStrategyParameters.BytesRead}, completed {mutableStrategyParameters.IsCompleted}, read queue items count {state.ReadLocalQueue.Count}.");
 
             if (mutableStrategyParameters.IsCompleted)
             {
@@ -287,8 +287,6 @@ namespace GzipStreamExtensions.GZipTest.Services
             var localBufferSize = (int)Math.Ceiling((double)bufferSize / tasksCount);
             var localOffset = 0;
 
-            log.LogInfo($"Tasks count {tasksCount}");
-
             for (int i = 0; i < tasksCount; i++)
             {
                 var task = new InternalLocalQueueTask
@@ -302,8 +300,6 @@ namespace GzipStreamExtensions.GZipTest.Services
 
                 task.IsTerminal = mutableStrategyParameters.IsCompleted && (i + 1) == tasksCount;
                 localOffset += localBufferSize;
-
-                log.LogInfo($"Enqueued Write task {task.BufferOffset} {task.BufferSize} {task.IsTerminal}. Tasks count {state.WriteLocalQueue.Count}");
             }
         }
 
@@ -316,15 +312,13 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             if (!state.IsReadyToWrite)
             {
-                state.UnlockWriteLocalQueue(notifyWaitingTasks: true);
+                state.UnlockWriteLocalQueue();
                 return;
             }
 
             var strategy = state.FileTaskDescriptor.FileOperationStrategy;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
             var writeLocalQueueTask = state.WriteLocalQueue.Dequeue();
-
-            log.LogInfo($"Dequeued Write task {writeLocalQueueTask.BufferOffset} {writeLocalQueueTask.BufferSize} {writeLocalQueueTask.IsTerminal}. Tasks count {state.WriteLocalQueue.Count}");
 
             var mutableStrategyParameters = new FileOperationStrategyMutableParameters
             {
@@ -336,18 +330,17 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             strategy.Write(strategyParameters, mutableStrategyParameters);
 
-            state.IsReadyToWrite = state.WriteLocalQueue.Any();
+            log.LogInfo($"Write: offset {writeLocalQueueTask.BufferOffset}, bytes wrote {mutableStrategyParameters.BufferSize}, completed {mutableStrategyParameters.IsCompleted}, write queue items count {state.WriteLocalQueue.Count}.");
 
-            var notifyWaitingTasks = false;
+            state.IsReadyToWrite = state.WriteLocalQueue.Any();
 
             if (!state.IsReadyToWrite)
             {
                 state.TotalBytesCountInWriteLocalQueue = 0;
-                notifyWaitingTasks = true;
                 state.IsGlobalTaskDoing = false;
             }
 
-            state.UnlockWriteLocalQueue(notifyWaitingTasks);
+            state.UnlockWriteLocalQueue();
         }
 
         private class InternalGlobalQueueTask
@@ -357,16 +350,10 @@ namespace GzipStreamExtensions.GZipTest.Services
 
         private class InternalLocalQueueTask
         {
-            private volatile bool isTerminal;
-
             public int BufferOffset { get; set; }
             public int BufferSize { get; set; }
             public byte[] Buffer { get; set; }
-            public bool IsTerminal
-            {
-                get { return isTerminal; }
-                set { isTerminal = value; }
-            }
+            public bool IsTerminal { get; set; }
 
             public InternalLocalQueueTask()
             {
@@ -454,26 +441,8 @@ namespace GzipStreamExtensions.GZipTest.Services
                 Monitor.Enter(writeLocalQueueSynchronization);
             }
 
-            public void UnlockWriteLocalQueue(bool notifyWaitingTasks)
+            public void UnlockWriteLocalQueue()
             {
-                //if (notifyWaitingTasks)
-                //    Monitor.Pulse(writeLocalQueueSynchronization);
-
-                Monitor.Exit(writeLocalQueueSynchronization);
-            }
-
-            public void WaitWriteLocalQueueWhile(Func<bool> func)
-            {
-                if (!IsAwaitable)
-                    return;
-
-                Monitor.Enter(writeLocalQueueSynchronization);
-
-                while (func())
-                {
-                    Monitor.Wait(writeLocalQueueSynchronization);
-                }
-
                 Monitor.Exit(writeLocalQueueSynchronization);
             }
         }
