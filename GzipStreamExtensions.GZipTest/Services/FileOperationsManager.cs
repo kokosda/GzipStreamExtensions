@@ -166,15 +166,15 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             state.IsGlobalTaskDoing = true;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
-            state.ReadBufferSize = strategyParameters.ReadBufferSize;
-            state.ReadBuffer = new byte[state.ReadBufferSize];
+            state.BufferSize = strategyParameters.ReadBufferSize;
+            state.Buffer = new byte[state.BufferSize];
             state.ReadLocalQueue = GetReadLocalQueue(
-                buffer: state.ReadBuffer,
-                bufferSize: state.ReadBufferSize,
+                buffer: state.Buffer,
+                bufferSize: state.BufferSize,
                 tasksCount: strategyParameters.ReadBufferChunks);
             state.IsReadLocalQueueEmpty = !state.ReadLocalQueue.Any();
 
-            log.LogInfo($"Working with range of bytes {globalQueueTask.SeekPoint} - {globalQueueTask.SeekPoint + state.ReadBufferSize}.");
+            log.LogInfo($"Working with range of bytes {globalQueueTask.SeekPoint} - {globalQueueTask.SeekPoint + state.BufferSize}.");
 
             state.UnlockGlobalQueue();
 
@@ -236,11 +236,6 @@ namespace GzipStreamExtensions.GZipTest.Services
 
             if (!state.ReadLocalQueue.Any())
                 state.IsReadLocalQueueEmpty = true;
-
-            if (state.IsReadyToWrite)
-            {
-
-            }
 
             var strategy = state.FileTaskDescriptor.FileOperationStrategy;
             var strategyParameters = state.FileTaskDescriptor.FileOperationStrategyParameters;
@@ -377,8 +372,8 @@ namespace GzipStreamExtensions.GZipTest.Services
             public Queue<InternalLocalQueueTask> ReadLocalQueue { get; set; }
             public Queue<InternalLocalQueueTask> WriteLocalQueue { get; set; }
             public FileTaskDescriptor FileTaskDescriptor { get; set; }
-            public byte[] ReadBuffer { get; set; }
-            public int ReadBufferSize { get; set; }
+            public byte[] Buffer { get; set; }
+            public int BufferSize { get; set; }
             public int TotalBytesCountInWriteLocalQueue
             {
                 get { return totalBytesCountInWriteLocalQueue; }
